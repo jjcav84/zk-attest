@@ -19,3 +19,7 @@ node_modules/
 
 # OS
 .DS_Store
+*.wtns
+*.ptau
+*.r1cs
+*.zkey
