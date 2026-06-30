@@ -1,0 +1,21 @@
+# Build artifacts
+/target
+/build/*.r1cs
+/build/*.wasm
+/build/*.zkey
+/build/*.vkey
+/build/*.ptau
+/build/witness*.json
+/build/proof*.json
+/build/public*.json
+/build/input*.json
+
+# Node
+node_modules/
+
+# Env
+.env
+*.env
+
+# OS
+.DS_Store

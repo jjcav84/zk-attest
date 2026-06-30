@@ -1,0 +1,10 @@
+[workspace]
+members = ["backend"]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["Jacob Cavazos <jjcav84@gmail.com>"]
+license = "MIT"
+repository = "https://github.com/jjcav84/zk-attest"

@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>zk-attest — Zero-Knowledge Attestations on Hedera</title>
+<style>
+:root {
+  --bg: #0a0a0f;
+  --surface: #13131a;
+  --border: #2a2a3a;
+  --text: #e0e0e8;
+  --muted: #8888a0;
+  --accent: #a78bfa;
+  --accent-dim: #7c6fb0;
+  --green: #4ade80;
+  --red: #f87171;
+  --mono: 'SF Mono', 'Fira Code', 'JetBrains Mono', monospace;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  min-height: 100vh;
+}
+.container { max-width: 900px; margin: 0 auto; padding: 2rem 1.5rem; }
+h1 { font-size: 1.75rem; margin-bottom: 0.25rem; }
+h1 span { color: var(--accent); }
+.subtitle { color: var(--muted); font-size: 0.9rem; margin-bottom: 2rem; }
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+.card h2 { font-size: 1.1rem; margin-bottom: 1rem; color: var(--accent); }
+label { display: block; font-size: 0.8rem; color: var(--muted); margin-bottom: 0.25rem; margin-top: 0.75rem; }
+select, input {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 0.6rem 0.75rem;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-family: var(--mono);
+}
+button {
+  background: var(--accent);
+  color: var(--bg);
+  border: none;
+  padding: 0.7rem 1.5rem;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 1rem;
+  width: 100%;
+  transition: opacity 0.2s;
+}
+button:hover { opacity: 0.85; }
+button:disabled { opacity: 0.4; cursor: not-allowed; }
+.result {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1rem;
+  margin-top: 1rem;
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 300px;
+  overflow-y: auto;
+}
+.success { border-color: var(--green); }
+.error { border-color: var(--red); }
+.badge {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  margin-left: 0.5rem;
+}
+.badge-green { background: rgba(74,222,128,0.15); color: var(--green); }
+.badge-red { background: rgba(248,113,113,0.15); color: var(--red); }
+.energy-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+.energy-bar-fill {
+  height: 6px;
+  background: var(--accent);
+  border-radius: 3px;
+  transition: width 0.5s;
+}
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+.stat { text-align: center; }
+.stat-value { font-size: 1.5rem; font-weight: 700; color: var(--accent); font-family: var(--mono); }
+.stat-label { font-size: 0.7rem; color: var(--muted); margin-top: 0.25rem; }
+.privacy-note {
+  font-size: 0.75rem;
+  color: var(--muted);
+  margin-top: 0.5rem;
+  font-style: italic;
+}
+.thermo {
+  background: linear-gradient(90deg, #1a1a2e 0%, #2a1a4e 50%, #a78bfa 100%);
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  margin-top: 0.75rem;
+  border: 1px solid var(--border);
+}
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>zk<span>-</span>attest</h1>
+  <p class="subtitle">Zero-knowledge attestations on Hedera — prove without revealing. Powered by FMD physics energy scoring.</p>
+
+  <div class="card">
+    <h2>1. Issue Credential</h2>
+    <p class="subtitle" style="margin: 0 0 0.5rem 0">Simulated authority signs your private value.</p>
+    <label>Attestation Type</label>
+    <select id="attestType">
+      <option value="0">Age (prove age >= threshold)</option>
+      <option value="1">Income (prove income >= threshold)</option>
+      <option value="2">Credential (prove credential possession)</option>
+    </select>
+    <label id="valueLabel">Birth Year</label>
+    <input id="privateValue" type="number" value="2000" placeholder="2000">
+    <button onclick="issue()">Issue Signed Credential</button>
+    <div id="issueResult" class="result" style="display:none"></div>
+  </div>
+
+  <div class="card">
+    <h2>2. Generate Proof & Submit to Hedera</h2>
+    <label>Threshold (minimum to prove)</label>
+    <input id="threshold" type="number" value="18" placeholder="18">
+    <button id="attestBtn" onclick="attest()" disabled>Generate ZK Proof + Submit to HCS/HTS</button>
+    <div id="attestResult" class="result" style="display:none"></div>
+  </div>
+
+  <div class="card">
+    <h2>3. Verify Attestation</h2>
+    <button id="verifyBtn" onclick="verify()" disabled>Verify Proof</button>
+    <div id="verifyResult" class="result" style="display:none"></div>
+  </div>
+
+  <div class="card">
+    <h2>Live Metrics <span class="badge badge-green" id="hederaBadge">simulated</span></h2>
+    <div class="stats-grid" id="statsGrid">
+      <div class="stat"><div class="stat-value" id="statAttest">0</div><div class="stat-label">Attestations</div></div>
+      <div class="stat"><div class="stat-value" id="statVerified">0</div><div class="stat-label">Verified</div></div>
+      <div class="stat"><div class="stat-value" id="statHCS">0</div><div class="stat-label">HCS Messages</div></div>
+      <div class="stat"><div class="stat-value" id="statHTS">0</div><div class="stat-label">HTS Mints</div></div>
+      <div class="stat"><div class="stat-value" id="statTxs">0</div><div class="stat-label">Hedera Txs</div></div>
+      <div class="stat"><div class="stat-value" id="statEnergy">0.0</div><div class="stat-label">Avg Energy</div></div>
+    </div>
+    <div class="thermo">
+      Each attestation = 3+ Hedera transactions (HCS proof log + HTS NFT mint + HCS energy log).
+      Energy scored by FMD route energy model: <code>energy = confidence × √(depth × timing) × latency_decay × (1 - cost_penalty)</code>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = window.location.origin.replace(/:\d+$/, ':3001') || 'http://localhost:3001';
+let issuedData = null;
+let attestData = null;
+
+const typeLabels = {0: 'Age', 1: 'Income', 2: 'Credential'};
+const valueLabels = {0: 'Birth Year', 1: 'Annual Income ($)', 2: 'Credential ID'};
+const defaultValues = {0: '2000', 1: '75000', 2: '999'};
+const defaultThresholds = {0: '18', 1: '50000', 2: '999'};
+
+document.getElementById('attestType').addEventListener('change', (e) => {
+  const t = e.target.value;
+  document.getElementById('valueLabel').textContent = valueLabels[t];
+  document.getElementById('privateValue').value = defaultValues[t];
+  document.getElementById('threshold').value = defaultThresholds[t];
+});
+
+async function issue() {
+  const type = parseInt(document.getElementById('attestType').value);
+  const value = parseInt(document.getElementById('privateValue').value);
+  const el = document.getElementById('issueResult');
+  el.style.display = 'block';
+  el.textContent = 'Issuing credential...';
+  try {
+    const res = await fetch(`${API}/api/issue`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({private_value: value, attestation_type: type})
+    });
+    issuedData = await res.json();
+    el.className = 'result success';
+    el.textContent = JSON.stringify(issuedData, null, 2);
+    document.getElementById('attestBtn').disabled = false;
+  } catch(e) {
+    el.className = 'result error';
+    el.textContent = 'Error: ' + e.message;
+  }
+}
+
+async function attest() {
+  if (!issuedData) return;
+  const threshold = parseInt(document.getElementById('threshold').value);
+  const el = document.getElementById('attestResult');
+  el.style.display = 'block';
+  el.textContent = 'Generating ZK proof (Groth16) + submitting to Hedera...';
+  document.getElementById('attestBtn').disabled = true;
+  try {
+    const res = await fetch(`${API}/api/attest`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        private_value: issuedData.private_value,
+        attestation_type: issuedData.attestation_type,
+        issuer_pubkey_hash: issuedData.issuer_pubkey_hash,
+        issuer_signature: issuedData.issuer_signature,
+        signature_randomness: issuedData.signature_randomness,
+        threshold: threshold,
+        issuer_trust: issuedData.issuer_trust
+      })
+    });
+    attestData = await res.json();
+    el.className = 'result success';
+    const display = {...attestData};
+    delete display.proof;
+    el.textContent = JSON.stringify(display, null, 2);
+    document.getElementById('verifyBtn').disabled = false;
+    document.getElementById('attestBtn').disabled = false;
+    refreshStats();
+  } catch(e) {
+    el.className = 'result error';
+    el.textContent = 'Error: ' + e.message;
+    document.getElementById('attestBtn').disabled = false;
+  }
+}
+
+async function verify() {
+  if (!attestData) return;
+  const el = document.getElementById('verifyResult');
+  el.style.display = 'block';
+  el.textContent = 'Verifying proof...';
+  try {
+    const res = await fetch(`${API}/api/verify`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        proof: attestData.proof,
+        public_signals: attestData.public_signals,
+        proof_id: attestData.proof_id
+      })
+    });
+    const data = await res.json();
+    el.className = data.verified ? 'result success' : 'result error';
+    el.textContent = JSON.stringify(data, null, 2);
+    refreshStats();
+  } catch(e) {
+    el.className = 'result error';
+    el.textContent = 'Error: ' + e.message;
+  }
+}
+
+async function refreshStats() {
+  try {
+    const res = await fetch(`${API}/api/stats`);
+    const s = await res.json();
+    document.getElementById('statAttest').textContent = s.total_attestations;
+    document.getElementById('statVerified').textContent = s.total_verified;
+    document.getElementById('statHCS').textContent = s.total_hcs_messages;
+    document.getElementById('statHTS').textContent = s.total_hts_mints;
+    document.getElementById('statTxs').textContent = s.total_hedera_transactions;
+    document.getElementById('statEnergy').textContent = s.avg_energy.toFixed(1);
+  } catch(e) {}
+}
+
+async function checkHealth() {
+  try {
+    const res = await fetch(`${API}/api/health`);
+    const h = await res.json();
+    if (h.hedera_connected) {
+      const badge = document.getElementById('hederaBadge');
+      badge.textContent = 'Hedera connected';
+      badge.className = 'badge badge-green';
+    }
+  } catch(e) {}
+}
+
+refreshStats();
+checkHealth();
+</script>
+</body>
+</html>
