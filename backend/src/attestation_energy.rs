@@ -1,29 +1,21 @@
-//! Attestation Energy — adapts the FMD (Financial Molecular Dynamics) route
-//! energy scoring framework from the orkid workspace for ranking ZK attestations.
+//! Attestation Energy — thin domain adapter over the `negentropy` physics
+//! engine for ranking ZK attestations.
 //!
-//! In the orkid FMD physics engine, route energy scores arbitrage paths by:
-//!   energy = net_bps * sqrt(depth_ratio * timing_factor) * latency_decay * (1 - gas_penalty)
+//! The core thermodynamic formula (route energy, committor, negentropy
+//! extraction) lives in the [`negentropy`] crate. This module maps
+//! attestation domain quantities onto that engine:
 //!
-//! Here, we apply the same thermodynamic framework to attestations. Each
-//! attestation is a **negentropy extraction** — converting private, chaotic
-//! data into structured, verifiable order (a ZK proof). The energy score
-//! ranks attestations by:
+//! - **confidence** ← `attestation_type.base_depth() × issuer_trust`
+//! - **depth_ratio** ← confidence / log₁₀(threshold)
+//! - **timing_factor** ← exp(-age / half_life)
+//! - **latency_decay** ← 1 / (1 + total_latency × decay_rate)
+//! - **cost_penalty** ← (HCS + HTS cost in HBAR) × HBAR price, normalized
 //!
-//! - **Confidence depth** (analogous to pool liquidity depth): how strong is
-//!   the underlying credential? A government ID has more depth than a
-//!   self-attestation.
-//! - **Timing factor** (analogous to hop count decay): how recent is the
-//!   attestation? Stale attestations decay like multi-hop routes.
-//! - **Latency decay** (analogous to stage latency): how long did proof
-//!   generation + verification take? Faster = higher energy.
-//! - **Cost penalty** (analogous to gas penalty): what did the HCS submission
-//!   + HTS minting cost in HBAR? Lower cost = higher energy.
-//!
-//! The committor function from TPS (Transition Path Sampling) is adapted to
-//! predict the probability that an attestation will be challenged/contested
-//! — a "rare event" in the attestation landscape.
+//! See <https://github.com/jjcav84/negentropy> for the physics.
 
 use serde::{Deserialize, Serialize};
+
+use negentropy::{Committor, Negentropy, RouteEnergy};
 
 /// Attestation type — determines the confidence depth baseline.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -62,7 +54,11 @@ impl AttestationType {
     }
 }
 
-/// Attestation energy evaluation result — mirrors RouteEnergyResult from FMD.
+/// Attestation energy evaluation result.
+///
+/// Produced by [`AttestationPotential::energy`]. The fields mirror the core
+/// `negentropy::RouteEnergyResult` plus domain-specific extras (committor
+/// and negentropy bits).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AttestationEnergyResult {
     /// Total energy score (higher = better quality attestation)
@@ -114,37 +110,28 @@ impl Default for AttestationPotential {
     }
 }
 
+/// Half-life for attestation recency decay (1 hour, in seconds).
+const HALF_LIFE_SECS: f64 = 3600.0;
+
 impl AttestationPotential {
-    /// Evaluate attestation energy — adapts the FMD route energy formula.
+    /// Evaluate attestation energy via the `negentropy` physics engine.
     ///
-    /// FMD route energy:
-    ///   energy = net_bps * sqrt(depth_ratio * timing_factor) * latency_decay * (1 - gas_penalty)
-    ///
-    /// Attestation energy:
-    ///   energy = confidence * sqrt(depth_ratio * timing_factor) * latency_decay * (1 - cost_penalty)
-    ///
-    /// Where:
-    ///   confidence = base_depth(attestation_type) * issuer_trust_score
-    ///   depth_ratio = confidence / threshold (higher threshold = harder to prove = more valuable)
-    ///   timing_factor = exp(-age / half_life)  (recency decay)
-    ///   latency_decay = 1 / (1 + total_latency_ms * decay_rate)
-    ///   cost_penalty = (hcs_cost + hts_cost) * hbar_price * normalization
+    /// Delegates:
+    /// - energy → `negentropy::RouteEnergy::new`
+    /// - committor → `negentropy::Committor::score`
+    /// - negentropy_bits → `negentropy::Negentropy::from_constraints`
     pub fn energy(&self, attestation_type: AttestationType, threshold: u64, issuer_trust: f64) -> AttestationEnergyResult {
-        // Confidence: base depth scaled by issuer trust (0..1)
+        // Domain mapping: base depth × issuer trust → confidence
         let confidence = attestation_type.base_depth() * issuer_trust.clamp(0.0, 1.0);
 
         // Depth ratio: confidence relative to threshold strictness
-        // Higher threshold = harder to prove = more negentropy extracted
         let threshold_f = threshold.max(1) as f64;
         let depth_ratio = confidence / threshold_f.log10().max(1.0);
 
         // Timing factor: exponential decay based on attestation age
-        // Half-life of 1 hour (3600s) — stale attestations lose energy
-        let half_life = 3600.0;
-        let timing_factor = (-self.attestation_age_secs / half_life).exp();
+        let timing_factor = (-self.attestation_age_secs / HALF_LIFE_SECS).exp();
 
         // Latency decay: total proof + verify latency
-        // Analogous to FMD: (1 - 0.001 * hops * stage_latency_ms).max(0)
         let total_latency = self.proof_latency_ms + self.verify_latency_ms;
         let latency_decay = 1.0 / (1.0 + total_latency as f64 * 0.0001);
 
@@ -152,26 +139,22 @@ impl AttestationPotential {
         let total_cost_usd = (self.hcs_cost_hbar + self.hts_mint_cost_hbar) * self.hbar_price_usd;
         let cost_penalty = (total_cost_usd * 0.01).min(0.5);
 
-        // Energy: the core formula, adapted from FMD route_energy.rs
-        let energy = confidence
-            * (depth_ratio * timing_factor).sqrt()
-            * latency_decay
-            * (1.0 - cost_penalty).max(0.0);
+        // Core energy from negentropy
+        let energy = RouteEnergy::new(
+            confidence,
+            depth_ratio,
+            timing_factor,
+            latency_decay,
+            cost_penalty,
+        )
+        .energy;
 
-        // Committor: probability attestation is valid & uncontested
-        // Adapted from TPS committor function — uses depth, timing, and cost
-        // as features for a simplified probability estimate
-        let committor = (depth_ratio / (1.0 + depth_ratio))
-            * timing_factor
-            * (1.0 - cost_penalty * 0.5)
-            .clamp(0.0, 1.0);
+        // Committor from negentropy (TPS rare-event prediction)
+        let committor = Committor::score(depth_ratio, timing_factor, cost_penalty);
 
-        // Negentropy: information extracted by the proof (in bits)
-        // Each constraint contributes ~1 bit of negentropy (order from chaos)
-        // This is the Shannon entropy reduction: H = -sum(p_i * log2(p_i))
-        // For a ZK proof with N constraints, negentropy ~ N * log2(threshold)
-        let negentropy_bits = self.constraint_count as f64
-            * (threshold_f.log2().max(1.0));
+        // Negentropy extracted: N = constraint_count × log₂(threshold)
+        let negentropy_bits =
+            Negentropy::from_constraints(self.constraint_count, threshold).bits();
 
         AttestationEnergyResult {
             energy,
@@ -243,6 +226,20 @@ mod tests {
         assert!(
             low_trust.energy < high_trust.energy,
             "lower issuer trust should reduce energy"
+        );
+    }
+
+    #[test]
+    fn test_negentropy_formula() {
+        // 27 constraints, threshold 18: N = 27 * log2(18) ≈ 112.6 bits
+        let pot = AttestationPotential::default();
+        let result = pot.energy(AttestationType::Age, 18, 0.9);
+        let expected = 27.0 * (18.0f64).log2();
+        assert!(
+            (result.negentropy_bits - expected).abs() < 0.01,
+            "negentropy should be 27 * log2(18) ≈ {:.1}, got {:.1}",
+            expected,
+            result.negentropy_bits
         );
     }
 }

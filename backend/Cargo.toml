@@ -23,3 +23,4 @@ anyhow = "1"
 thiserror = "1"
 rand = "0.8"
 hiero-sdk = "0.45"
+negentropy = { git = "https://github.com/jjcav84/negentropy.git" }
