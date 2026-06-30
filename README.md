@@ -1,5 +1,7 @@
 # zk-attest
 
+**By [Orkid Labs](https://www.orkidlabs.com)** — privacy-first crypto engineering
+
 **Zero-knowledge attestation platform on Hedera — prove without revealing.**
 
 zk-attest lets users prove attributes about themselves (age, income, credential possession) using Groth16 zero-knowledge proofs, without revealing the underlying private data. Each attestation is logged to Hedera Consensus Service (HCS) for an immutable audit trail and minted as an HTS NFT — a transferable, verifiable credential.
@@ -220,6 +222,12 @@ zk-attest/
 - **Issuer marketplace**: Multiple credential authorities with on-chain reputation
 - **Revocation**: HCS-based revocation registry
 - **Batch verification**: Verify multiple proofs in a single HCS message
+
+## About
+
+Built by [Orkid Labs](https://www.orkidlabs.com) — a privacy-first crypto
+engineering lab building thermodynamic infrastructure for decentralized
+systems. See our other work at [orkidlabs.com](https://www.orkidlabs.com).
 
 ## License
 
