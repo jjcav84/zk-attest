@@ -10,7 +10,7 @@
 
 zk-attest lets users prove attributes about themselves (age, income, credential possession) using Groth16 zero-knowledge proofs, without revealing the underlying private data. Each attestation is logged to Hedera Consensus Service (HCS) for an immutable audit trail and minted as an HTS NFT — a transferable, verifiable credential.
 
-> **Status:** This repository is a **circuit skeleton and scoring infrastructure demo**. The issuer signature in the circom circuit is a placeholder (algebraic, not cryptographically secure). The Hedera HCS/HTS integration is currently **simulated** — `hiero-sdk` is wired in but no real transactions are submitted until credentials are configured. The next sprint replaces the placeholder signature with a Poseidon/Merkle-tree-based issuer registry and enables real Hedera submission.
+> **Status:** The issuer signature scheme uses a **Poseidon-based Schnorr-like signature** (`pk = Poseidon(sk)`, `sig = sk + Poseidon(pk, m, r)`, verified in-circuit via `Poseidon(sig - h) === pk`). Forging requires a preimage attack on Poseidon over BN254. The Hedera HCS/HTS integration is currently **simulated** — `hiero-sdk` is wired in but no real transactions are submitted until credentials are configured.
 
 Attestations are scored using an **attestation energy model** adapted from the [orkid FMD physics engine](https://github.com/jjcav84/orkid) — the same thermodynamic framework that scores arbitrage routes in production MEV extraction.
 
@@ -262,7 +262,8 @@ zk-attest/
 
 ## Production upgrades
 
-- **Poseidon signatures**: Replace simplified algebraic signature with Poseidon hash + EdDSA on BabyJubJub (native ZK-friendly)
+- **EdDSA on BabyJubJub**: Upgrade from Poseidon-Schnorr to full EdDSA for non-repudiation
+- **Merkle-tree issuer registry**: Multi-issuer support with on-chain revocation
 - **Real Hedera integration**: Wire `hiero-sdk` for live HCS/HTS transactions (code structure ready)
 - **Issuer marketplace**: Multiple credential authorities with on-chain reputation
 - **Revocation**: HCS-based revocation registry
