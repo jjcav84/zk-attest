@@ -12,6 +12,13 @@ zk-attest lets users prove attributes about themselves (age, income, credential 
 
 Attestations are scored using an **attestation energy model** adapted from the [orkid FMD physics engine](https://github.com/jjcav84/orkid) — the same thermodynamic framework that scores arbitrage routes in production MEV extraction.
 
+> **Note:** The orkid repository is private. Access can be provided to
+> Thrive Protocol reviewers and other appropriate cases on request —
+> contact [Orkid Labs](https://www.orkidlabs.com). The theoretical
+> foundation is published as a preprint:
+> ["Negative EV per Unit Time as Blockchain Inefficiency"](https://www.researchgate.net/publication/399474539_Negative_EV_per_Unit_Time_as_Blockchain_Inefficiency)
+> — [Jacob Cavazos, ResearchGate](https://www.researchgate.net/profile/Jacob-Cavazos).
+
 ## Why this matters
 
 Every age-gated website, income-verified service, and credential-checked platform today collects raw PII — birthdates, salary, ID numbers. This creates:
@@ -138,18 +145,45 @@ committor = (depth_ratio / (1 + depth_ratio)) * timing_factor * (1 - cost_penalt
 
 This estimates the probability that an attestation is valid and uncontested — a "rare event" prediction for attestation quality.
 
-## Transaction volume model (Milestone 4 target: 50K monthly transactions)
+## Thrive zkVerify Web3 Program (#45) — Grant Plan
 
-Each attestation generates **3 Hedera transactions** (HCS + HTS + HCS). Each verification adds **1 more**.
+### Ecosystem value proposition
 
-| Scenario | Attestations/month | Verifications/month | Hedera txs/month |
-|----------|-------------------|--------------------|--------------------|
-| Age-gated e-commerce | 8,000 | 8,000 | 56,000 |
-| Income verification (fintech KYC) | 5,000 | 5,000 | 30,000 |
-| Credential checks (gig platforms) | 3,000 | 3,000 | 18,000 |
-| **Total (conservative)** | **16,000** | **16,000** | **104,000** |
+zk-attest drives **proof verification volume** to zkVerify. Each attestation generates a ZK proof that is submitted to zkVerify for verification. The attestation is then logged to Hedera HCS and minted as an HTS NFT — the proof verification happens via zkVerify, the settlement happens on Hedera.
 
-**50K monthly transactions** is achievable with ~8,300 attestations/month — well within a single age-gated e-commerce deployment.
+| Scenario | Attestations/month | Proofs to zkVerify/month |
+|----------|-------------------|------------------------|
+| Age-gated e-commerce | 8,000 | 8,000 |
+| Income verification (fintech KYC) | 5,000 | 5,000 |
+| Credential checks (gig platforms) | 3,000 | 3,000 |
+| **Total (conservative)** | **16,000** | **16,000** |
+
+**25,000+ ZK Proofs** (Milestone 2: Initial Traction target) is achievable with ~25,000 attestations/month — well within a multi-deployment scenario.
+
+### Milestone roadmap
+
+Progressive achievement over 150 days, following Thrive's zkVerify Web3 Program milestone structure.
+
+**Application Requirements (10% unlocked at approval)**:
+- ✅ Detailed technical plan showing how zero-knowledge proofs will be integrated and verified using zkVerify
+- ✅ Zero-knowledge focused user experience design
+- ✅ Token utility and ecosystem value proposition
+- ✅ Business plan demonstrating revenue model and sustainability beyond grant period
+
+**Milestone 1: Live Deployment (10% unlocked) — 45 days post approval**:
+- Production deployment with fully functional zkVerify integration and proof verification
+- Beta testing with proof verification validation
+- Published documentation covering zkVerify integration and proof verification processes
+
+**Milestone 2: Initial Traction (30% unlocked) — 90 days post approval**:
+- Early traction metrics, choose one of the following:
+  - Transaction Volume: 25,000+ ZK Proofs sent to zkVerify
+  - Unique Users: 250+ unique addresses interacting with zkVerify integration
+
+**Milestone 3: Scale (50% unlocked) — 150 days post approval**:
+- Choose one of the following:
+  - Transaction Volume: 250,000+ ZK Proofs sent to zkVerify
+  - Unique Users: 2,500+ unique addresses interacting with zkVerify integration
 
 ## API
 
@@ -166,6 +200,9 @@ Each attestation generates **3 Hedera transactions** (HCS + HTS + HCS). Each ver
 
 ```bash
 # 1. Install circom + snarkjs
+# Linux:   circom-linux-amd64
+# macOS:   circom-darwin-amd64
+# Windows: circom-windows-amd64.exe
 curl -Ls https://github.com/iden3/circom/releases/latest/download/circom-linux-amd64 -o /usr/local/bin/circom
 npm install -g snarkjs
 
