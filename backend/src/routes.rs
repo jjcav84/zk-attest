@@ -1,7 +1,7 @@
 //! HTTP routes — the API surface for the zk-attest backend.
 
 use std::sync::Arc;
-use axum::{routing::{get, post}, Json, Router, extract::Path};
+use axum::{routing::{get, post}, Json, Router, extract::Path, middleware};
 use crate::state::AppState;
 use crate::types::*;
 use crate::attestation_energy::{AttestationPotential, AttestationType};
@@ -15,6 +15,7 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/api/stats", get(stats))
         .route("/api/energy/:proof_id", get(energy))
         .fallback_service(tower_http::services::ServeFile::new("frontend/index.html"))
+        .layer(middleware::from_fn(crate::auth::require_api_key))
         .with_state(state)
 }
 
