@@ -56,9 +56,11 @@ async fn attest(
     // 2. Compute attestation energy (FMD physics model)
     let attestation_type = AttestationType::from_u64(req.attestation_type)
         .unwrap_or(AttestationType::Age);
-    let mut potential = AttestationPotential::default();
-    potential.proof_latency_ms = proof_result.latency_ms;
-    potential.attestation_age_secs = 0.0; // fresh
+    let potential = AttestationPotential {
+        proof_latency_ms: proof_result.latency_ms,
+        attestation_age_secs: 0.0,
+        ..Default::default()
+    };
     let energy = potential.energy(attestation_type, req.threshold, req.issuer_trust);
 
     // 3. Hedera integration is simulated unless real credentials are configured.

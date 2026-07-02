@@ -66,9 +66,9 @@ static SIM_COUNTER: AtomicU64 = AtomicU64::new(1);
 /// numbers so the API contract is identical.
 pub async fn submit_attestation(
     config: &HederaConfig,
-    proof: &serde_json::Value,
-    public_signals: &[String],
-    proof_id: &str,
+    _proof: &serde_json::Value,
+    _public_signals: &[String],
+    _proof_id: &str,
     energy: &AttestationEnergyResult,
 ) -> Result<HederaAttestationResult> {
     if !config.enabled {
@@ -94,7 +94,7 @@ pub async fn submit_attestation(
 }
 
 /// Simulated submission — generates monotonic mock sequence numbers.
-fn simulated_submission(energy: &AttestationEnergyResult) -> HederaAttestationResult {
+fn simulated_submission(_energy: &AttestationEnergyResult) -> HederaAttestationResult {
     let seq = SIM_COUNTER.fetch_add(3, std::sync::atomic::Ordering::Relaxed);
     HederaAttestationResult {
         hcs_sequence: seq,
@@ -108,7 +108,7 @@ fn simulated_submission(energy: &AttestationEnergyResult) -> HederaAttestationRe
 pub async fn submit_verification(
     config: &HederaConfig,
     proof_id: &str,
-    verified: bool,
+    _verified: bool,
 ) -> Result<Option<u64>> {
     if !config.enabled {
         let seq = SIM_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
