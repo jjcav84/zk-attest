@@ -127,7 +127,7 @@ async fn verify(
         .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     // 2. Decode attestation type and threshold from public signals
-    // Public signals: [attestation_type, threshold, issuer_pubkey_hash, current_year]
+    // Public signals: [attestation_type, threshold, issuer_pubkey, current_year]
     let attestation_type = req.public_signals.first().and_then(|s| s.parse::<u64>().ok());
     let threshold = req.public_signals.get(1).and_then(|s| s.parse::<u64>().ok());
 

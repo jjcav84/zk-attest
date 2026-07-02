@@ -6,47 +6,51 @@
 //   1 = Income attestation:   proves annual income >= threshold
 //   2 = Credential attestation: proves possession of a valid credential
 //
-// Public inputs:  attestation_type, threshold, issuer_pubkey_hash, current_year
-// Private inputs: private_value, issuer_signature, signature_randomness
+// Signature scheme: Poseidon-based Schnorr-like signature
+// - Issuer secret key: sk (random field element, known only to issuer)
+// - Issuer public key: pk = Poseidon(sk) (public input)
+// - Signature on message m: choose random r, compute h = Poseidon(pk, m, r),
+//   then sig = sk + h
+// - Verification: Poseidon(sig - h) === pk (since sig - h = sk)
 //
-// The private_value is:
-//   - birth_year for age attestation (type 0)
-//   - annual_income for income attestation (type 1)
-//   - credential_id for credential attestation (type 2)
-//
-// The circuit constrains:
-//   1. The signature is valid: sig = private_value + pubkey * randomness
-//   2. For age: current_year - private_value >= threshold
-//   3. For income: private_value >= threshold
-//   4. For credential: private_value === threshold (credential ID match)
+// Public inputs:  attestation_type, threshold, issuer_pubkey, current_year
+// Private inputs: private_value, issuer_signature, signature_nonce
 
 pragma circom 2.2.3;
 
 include "node_modules/circomlib/circuits/comparators.circom";
 include "node_modules/circomlib/circuits/gates.circom";
+include "node_modules/circomlib/circuits/poseidon.circom";
 
 template Attest() {
     // Public inputs
     signal input attestation_type;     // 0=age, 1=income, 2=credential
     signal input threshold;            // minimum value to prove
-    signal input issuer_pubkey_hash;   // issuer's public key hash
+    signal input issuer_pubkey;        // pk = Poseidon(sk)
     signal input current_year;         // for age computation
 
     // Private inputs
     signal input private_value;        // birth_year / income / credential_id
-    signal input issuer_signature;     // issuer's signature
-    signal input signature_randomness; // randomness in signature
+    signal input issuer_signature;     // sig = sk + h
+    signal input signature_nonce;      // r (random nonce)
 
-    // --- Constraint 1: Signature verification (simplified) ---
-    // In production: Poseidon(private_value, issuer_pubkey_hash, randomness)
-    signal expected_sig;
-    expected_sig <== private_value + issuer_pubkey_hash * signature_randomness;
-    expected_sig === issuer_signature;
+    // --- Constraint 1: Poseidon signature verification ---
+    // h = Poseidon(pk, m, r) = Poseidon(issuer_pubkey, private_value, signature_nonce)
+    component hashChallenge = Poseidon(3);
+    hashChallenge.inputs[0] <== issuer_pubkey;
+    hashChallenge.inputs[1] <== private_value;
+    hashChallenge.inputs[2] <== signature_nonce;
+
+    // sig - h = sk (recoverable only by issuer who knows sk)
+    signal recovered_sk;
+    recovered_sk <== issuer_signature - hashChallenge.out;
+
+    // Poseidon(sk) === pk
+    component hashPk = Poseidon(1);
+    hashPk.inputs[0] <== recovered_sk;
+    hashPk.out === issuer_pubkey;
 
     // --- Constraint 2: Attestation-specific logic ---
-    // We use conditional constraints via the IsEqual trick:
-    // compute the difference for each type, then select the right one.
-
     // Age: diff_age = current_year - threshold - private_value (must be >= 0)
     signal diff_age;
     diff_age <== current_year - threshold - private_value;
@@ -60,9 +64,6 @@ template Attest() {
     diff_cred <== private_value - threshold;
 
     // Select the relevant difference based on attestation_type
-    // type 0: use diff_age, type 1: use diff_income, type 2: use diff_cred
-    // Use IsEqual to compute indicator signals (quadratic constraints)
-
     component eq_age = IsEqual();
     eq_age.in[0] <== attestation_type;
     eq_age.in[1] <== 0;
@@ -87,7 +88,7 @@ template Attest() {
     type_sum <== is_age + is_income + is_cred;
     type_sum === 1;
 
-    // Selected difference — use intermediate signals for each product
+    // Selected difference
     signal term_age;
     signal term_income;
     signal term_cred;
@@ -100,16 +101,13 @@ template Attest() {
 
     // For age and income: selected_diff >= 0 (16-bit range check)
     // For credential: selected_diff === 0 (credential ID must match exactly)
-    // We enforce both: range check AND zero check for credential
-
     component n2b = Num2Bits(16);
     n2b.in <== selected_diff;
 
     // For credential type, also enforce selected_diff === 0
-    // is_cred * selected_diff === 0
     signal cred_check;
     cred_check <== is_cred * selected_diff;
     cred_check === 0;
 }
 
-component main { public [attestation_type, threshold, issuer_pubkey_hash, current_year] } = Attest();
+component main { public [attestation_type, threshold, issuer_pubkey, current_year] } = Attest();

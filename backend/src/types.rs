@@ -17,9 +17,9 @@ pub struct IssueRequest {
 /// Response from the issuer.
 #[derive(Debug, Serialize)]
 pub struct IssueResponse {
-    pub issuer_pubkey_hash: String,
+    pub issuer_pubkey: String,
     pub issuer_signature: String,
-    pub signature_randomness: String,
+    pub signature_nonce: String,
     pub private_value: u64,
     pub attestation_type: u64,
     /// Issuer trust score (0..1) — affects attestation energy.
@@ -31,9 +31,9 @@ pub struct IssueResponse {
 pub struct AttestRequest {
     pub private_value: u64,
     pub attestation_type: u64,
-    pub issuer_pubkey_hash: String,
+    pub issuer_pubkey: String,
     pub issuer_signature: String,
-    pub signature_randomness: String,
+    pub signature_nonce: String,
     pub threshold: u64,
     pub issuer_trust: f64,
 }

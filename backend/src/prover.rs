@@ -31,11 +31,11 @@ pub fn generate_proof(req: &AttestRequest) -> Result<ProofResult> {
     let inputs = json!({
         "attestation_type": req.attestation_type.to_string(),
         "threshold": req.threshold.to_string(),
-        "issuer_pubkey_hash": req.issuer_pubkey_hash,
+        "issuer_pubkey": req.issuer_pubkey,
         "current_year": current_year.to_string(),
         "private_value": req.private_value.to_string(),
         "issuer_signature": req.issuer_signature,
-        "signature_randomness": req.signature_randomness,
+        "signature_nonce": req.signature_nonce,
     });
     let input_path = tmp_dir.join("input.json");
     std::fs::write(&input_path, inputs.to_string())?;
