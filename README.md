@@ -193,12 +193,26 @@ Progressive achievement over 150 days, following Thrive's zkVerify Web3 Program 
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/api/health` | GET | Health check + Hedera connection status |
+| `/api/health` | GET | Health check + Hedera connection status (unauthenticated) |
 | `/api/issue` | POST | Issue signed credential (simulated authority) |
 | `/api/attest` | POST | Generate ZK proof + submit to HCS/HTS |
 | `/api/verify` | POST | Verify a proof + log to HCS |
 | `/api/stats` | GET | Metrics for milestone tracking |
 | `/api/energy/:id` | GET | Attestation energy score (FMD model) |
+
+All endpoints except `/api/health` require `x-api-key: $ORKID_API_KEY` in production.
+
+### Production hardening
+
+The backend is locked down for production deployment with two middleware layers:
+
+1. **API key authentication** (`src/auth.rs`) — every sensitive endpoint requires the `x-api-key` header to match `ORKID_API_KEY`. `/api/health` remains exempt. Dev mode: if `ORKID_API_KEY` is unset, all requests are allowed.
+2. **CORS restriction** (`src/auth.rs`) — cross-origin access is limited to the comma-separated list in `ORKID_CORS_ORIGINS`, defaulting to `http://localhost:3000`. Wildcard CORS is removed.
+
+```bash
+export ORKID_API_KEY="your-256-bit-secret"
+export ORKID_CORS_ORIGINS="https://app.orkidlabs.xyz,http://localhost:3000"
+```
 
 ## Quick start
 
@@ -248,6 +262,7 @@ zk-attest/
 │   └── src/
 │       ├── main.rs            # axum server entry
 │       ├── routes.rs          # HTTP API
+│       ├── auth.rs            # API key + CORS middleware
 │       ├── types.rs           # API types
 │       ├── state.rs           # Metrics tracking
 │       ├── issuer.rs          # Credential issuance (simulated authority)
