@@ -34,7 +34,11 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let state = Arc::new(state::AppState::new());
-    let app = routes::router(state.clone()).layer(CorsLayer::permissive());
+    let cors = CorsLayer::new()
+        .allow_origin(tower_http::cors::Any) // TODO: restrict to production frontend origin
+        .allow_methods([axum::http::Method::GET, axum::http::Method::POST])
+        .allow_headers([axum::http::header::CONTENT_TYPE]);
+    let app = routes::router(state.clone()).layer(cors);
 
     let port: u16 = std::env::var("PORT")
         .ok()

@@ -1,7 +1,7 @@
 //! Application state — tracks metrics for Hedera milestone tracking.
 
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Mutex;
+use std::sync::RwLock;
 use std::collections::HashSet;
 
 pub struct AppState {
@@ -10,9 +10,9 @@ pub struct AppState {
     pub hcs_messages: AtomicU64,
     pub hts_mints: AtomicU64,
     pub hedera_txs: AtomicU64,
-    pub unique_users: Mutex<HashSet<String>>,
-    pub last_attestation_at: Mutex<Option<String>>,
-    pub energy_sum: Mutex<f64>,
+    pub unique_users: RwLock<HashSet<String>>,
+    pub last_attestation_at: RwLock<Option<String>>,
+    pub energy_sum: RwLock<f64>,
 }
 
 impl AppState {
@@ -23,21 +23,24 @@ impl AppState {
             hcs_messages: AtomicU64::new(0),
             hts_mints: AtomicU64::new(0),
             hedera_txs: AtomicU64::new(0),
-            unique_users: Mutex::new(HashSet::new()),
-            last_attestation_at: Mutex::new(None),
-            energy_sum: Mutex::new(0.0),
+            unique_users: RwLock::new(HashSet::new()),
+            last_attestation_at: RwLock::new(None),
+            energy_sum: RwLock::new(0.0),
         }
     }
 
     pub fn record_attestation(&self, user_id: &str, energy: f64) {
         self.attestations.fetch_add(1, Ordering::Relaxed);
-        if let Ok(mut users) = self.unique_users.lock() {
+        {
+            let mut users = self.unique_users.write().expect("unique_users lock poisoned");
             users.insert(user_id.to_string());
         }
-        if let Ok(mut ts) = self.last_attestation_at.lock() {
+        {
+            let mut ts = self.last_attestation_at.write().expect("last_attestation_at lock poisoned");
             *ts = Some(chrono::Utc::now().to_rfc3339());
         }
-        if let Ok(mut sum) = self.energy_sum.lock() {
+        {
+            let mut sum = self.energy_sum.write().expect("energy_sum lock poisoned");
             *sum += energy;
         }
     }
@@ -57,13 +60,13 @@ impl AppState {
     }
 
     pub fn stats(&self) -> (u64, u64, u64, u64, u64, u64, Option<String>, f64) {
-        let users = self.unique_users.lock().map(|u| u.len() as u64).unwrap_or(0);
-        let last = self.last_attestation_at.lock().ok().and_then(|t| t.clone());
+        let users = self.unique_users.read().expect("unique_users read lock poisoned").len() as u64;
+        let last = self.last_attestation_at.read().expect("last_attestation_at read lock poisoned").clone();
         let avg = {
             let count = self.attestations.load(Ordering::Relaxed);
             if count == 0 { 0.0 }
             else {
-                let sum = self.energy_sum.lock().map(|s| *s).unwrap_or(0.0);
+                let sum = *self.energy_sum.read().expect("energy_sum read lock poisoned");
                 sum / count as f64
             }
         };

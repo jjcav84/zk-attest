@@ -10,6 +10,8 @@
 
 zk-attest lets users prove attributes about themselves (age, income, credential possession) using Groth16 zero-knowledge proofs, without revealing the underlying private data. Each attestation is logged to Hedera Consensus Service (HCS) for an immutable audit trail and minted as an HTS NFT — a transferable, verifiable credential.
 
+> **Status:** This repository is a **circuit skeleton and scoring infrastructure demo**. The issuer signature in the circom circuit is a placeholder (algebraic, not cryptographically secure). The Hedera HCS/HTS integration is currently **simulated** — `hiero-sdk` is wired in but no real transactions are submitted until credentials are configured. The next sprint replaces the placeholder signature with a Poseidon/Merkle-tree-based issuer registry and enables real Hedera submission.
+
 Attestations are scored using an **attestation energy model** adapted from the [orkid FMD physics engine](https://github.com/jjcav84/orkid) — the same thermodynamic framework that scores arbitrage routes in production MEV extraction.
 
 > **Note:** The orkid repository is private. Access can be provided to
@@ -59,7 +61,9 @@ The circuit constrains:
 
 ## Hedera integration
 
-Each attestation generates **3+ Hedera transactions**:
+> **Current state:** The Hedera integration is **simulated** until real credentials are configured. The `hiero-sdk` dependency is wired in and the code structure is ready, but `submit_attestation` and `submit_verification` return mock sequence numbers when no credentials are present. To enable real transactions, set `HEDERA_OPERATOR_ID` and `HEDERA_OPERATOR_KEY` environment variables.
+
+When fully wired, each attestation generates **3+ Hedera transactions**:
 
 | Transaction | Service | Purpose |
 |------------|---------|---------|

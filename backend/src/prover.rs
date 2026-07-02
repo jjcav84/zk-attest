@@ -82,8 +82,15 @@ pub fn generate_proof(req: &AttestRequest) -> Result<ProofResult> {
 
     let public_signals: Vec<String> = public_raw
         .as_array()
-        .map(|arr| arr.iter().map(|v| v.as_str().unwrap_or("0").to_string()).collect())
-        .unwrap_or_default();
+        .ok_or_else(|| anyhow!("public signals must be an array"))?
+        .iter()
+        .map(|v| {
+            v.as_str()
+                .map(|s| s.to_string())
+                .or_else(|| v.as_u64().map(|n| n.to_string()))
+                .ok_or_else(|| anyhow!("public signal must be a string or integer"))
+        })
+        .collect::<Result<Vec<_>>>()?;
 
     let _ = std::fs::remove_dir_all(&tmp_dir);
 

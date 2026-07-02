@@ -30,15 +30,25 @@ async fn health() -> Json<HealthResponse> {
 async fn issue(
     Json(req): Json<IssueRequest>,
 ) -> Result<Json<IssueResponse>, (axum::http::StatusCode, String)> {
+    validate_issue(&req)?;
     crate::issuer::issue(&req)
         .map(Json)
         .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
+}
+
+fn validate_issue(req: &IssueRequest) -> Result<(), (axum::http::StatusCode, String)> {
+    if req.private_value > 1_000_000_000_000 {
+        return Err((axum::http::StatusCode::BAD_REQUEST, "private_value is unreasonably large".into()));
+    }
+    Ok(())
 }
 
 async fn attest(
     axum::extract::State(state): axum::extract::State<Arc<AppState>>,
     Json(req): Json<AttestRequest>,
 ) -> Result<Json<AttestResponse>, (axum::http::StatusCode, String)> {
+    validate_attest(&req)?;
+
     // 1. Generate ZK proof
     let proof_result = crate::prover::generate_proof(&req)
         .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -51,7 +61,7 @@ async fn attest(
     potential.attestation_age_secs = 0.0; // fresh
     let energy = potential.energy(attestation_type, req.threshold, req.issuer_trust);
 
-    // 3. Submit to Hedera (HCS + HTS)
+    // 3. Hedera integration is simulated unless real credentials are configured.
     let hedera_config = crate::hedera::HederaConfig::default();
     let hedera_result = crate::hedera::submit_attestation(
         &hedera_config,
@@ -63,21 +73,22 @@ async fn attest(
     .await
     .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    // 4. Record metrics
+    // 4. Record metrics — only count real Hedera transactions
     let user_id = format!("user-{}", req.private_value);
     state.record_attestation(&user_id, energy.energy);
-    state.record_hcs(); // proof log
-    state.record_hts_mint(); // NFT
-    state.record_hcs(); // energy log
+    if !hedera_result.simulated {
+        state.record_hcs(); // proof log
+        state.record_hts_mint(); // NFT
+        state.record_hcs(); // energy log
+    }
 
     tracing::info!(
-        "attestation created: id={}, type={}, energy={:.2}, negentropy={:.1} bits, hcs_seq={}, nft={}",
+        "attestation created: id={}, type={}, energy={:.2}, negentropy={:.1} bits, simulated={}",
         proof_result.proof_id,
         attestation_type.label(),
         energy.energy,
         energy.negentropy_bits,
-        hedera_result.hcs_sequence,
-        hedera_result.nft_serial,
+        hedera_result.simulated,
     );
 
     Ok(Json(AttestResponse {
@@ -89,6 +100,19 @@ async fn attest(
         energy,
         hedera_submitted: !hedera_result.simulated,
     }))
+}
+
+fn validate_attest(req: &AttestRequest) -> Result<(), (axum::http::StatusCode, String)> {
+    if req.attestation_type > 2 {
+        return Err((axum::http::StatusCode::BAD_REQUEST, "attestation_type must be 0, 1, or 2".into()));
+    }
+    if req.threshold > 1_000_000_000_000 {
+        return Err((axum::http::StatusCode::BAD_REQUEST, "threshold is unreasonably large".into()));
+    }
+    if req.issuer_trust.is_nan() || req.issuer_trust < 0.0 || req.issuer_trust > 1.0 {
+        return Err((axum::http::StatusCode::BAD_REQUEST, "issuer_trust must be in [0,1]".into()));
+    }
+    Ok(())
 }
 
 async fn verify(
@@ -105,7 +129,7 @@ async fn verify(
     let attestation_type = req.public_signals.first().and_then(|s| s.parse::<u64>().ok());
     let threshold = req.public_signals.get(1).and_then(|s| s.parse::<u64>().ok());
 
-    // 3. Submit verification result to HCS
+    // 3. Submit verification result to HCS (only if real credentials are configured)
     let config = crate::hedera::HederaConfig::default();
     let hcs_verify_sequence = crate::hedera::submit_verification(&config, &req.proof_id, verified)
         .await
@@ -114,7 +138,9 @@ async fn verify(
 
     if verified {
         state.record_verification();
-        state.record_hcs();
+        if hcs_verify_sequence.is_some() {
+            state.record_hcs();
+        }
     }
 
     tracing::info!(
